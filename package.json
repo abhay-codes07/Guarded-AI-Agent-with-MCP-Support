@@ -15,7 +15,7 @@
     "dev": "concurrently -n agent,dashboard -c blue,magenta \"pnpm agent\" \"pnpm dashboard\"",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc -b --noEmit packages/shared packages/policy-engine packages/mcp-vault packages/agent"
+    "typecheck": "tsc -p tsconfig.typecheck.json"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

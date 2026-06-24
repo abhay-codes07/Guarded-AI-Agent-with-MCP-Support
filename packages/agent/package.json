@@ -1,0 +1,26 @@
+{
+  "name": "@gaa/agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/server.ts",
+  "scripts": {
+    "start": "tsx src/server.ts",
+    "dev": "tsx watch src/server.ts"
+  },
+  "dependencies": {
+    "@fastify/cors": "^10.0.1",
+    "@fastify/websocket": "^11.0.1",
+    "@gaa/policy-engine": "workspace:*",
+    "@gaa/shared": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "fastify": "^5.1.0",
+    "jose": "^5.9.6",
+    "openai": "^4.77.0",
+    "ws": "^8.18.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.13"
+  }
+}
