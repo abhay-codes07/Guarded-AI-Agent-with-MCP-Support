@@ -1,0 +1,27 @@
+{
+  "name": "guarded-ai-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A guarded AI agent with MCP support: a policy layer that gates every tool call between an LLM and its MCP tool servers.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "vault": "tsx packages/mcp-vault/src/server.ts",
+    "agent": "tsx watch packages/agent/src/server.ts",
+    "agent:start": "tsx packages/agent/src/server.ts",
+    "dashboard": "pnpm --filter dashboard dev",
+    "dev": "concurrently -n agent,dashboard -c blue,magenta \"pnpm agent\" \"pnpm dashboard\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -b --noEmit packages/shared packages/policy-engine packages/mcp-vault packages/agent"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "concurrently": "^9.1.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

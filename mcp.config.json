@@ -1,0 +1,20 @@
+{
+  "$comment": "Registry of MCP servers. Add an entry here and the agent discovers its tools at runtime — no agent code changes. Tool names are never hardcoded.",
+  "servers": [
+    {
+      "id": "vault",
+      "label": "Vault (local file manager + record store)",
+      "transport": "stdio",
+      "command": "tsx",
+      "args": ["packages/mcp-vault/src/server.ts"],
+      "trustTier": "trusted"
+    },
+    {
+      "id": "deepwiki",
+      "label": "DeepWiki (remote, public docs over GitHub repos)",
+      "transport": "http",
+      "url": "https://mcp.deepwiki.com/mcp",
+      "trustTier": "untrusted"
+    }
+  ]
+}
