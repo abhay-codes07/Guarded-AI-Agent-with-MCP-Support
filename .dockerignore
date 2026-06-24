@@ -1,0 +1,14 @@
+node_modules
+**/node_modules
+.next
+**/.next
+dist
+**/dist
+.git
+.env
+.env.*
+CLAUDE.md
+decision.md
+docs
+notes
+data/*.json
