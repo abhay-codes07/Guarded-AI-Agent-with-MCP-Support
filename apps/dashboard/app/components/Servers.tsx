@@ -24,46 +24,55 @@ export function Servers({
     }
   };
 
+  const active = tools.filter((t) => !t.quarantined).length;
+
   return (
     <Section
-      title="MCP Servers & Tools"
+      title="MCP Servers"
+      icon={
+        <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.7" viewBox="0 0 24 24">
+          <rect x="3" y="4" width="18" height="6" rx="1.5" />
+          <rect x="3" y="14" width="18" height="6" rx="1.5" />
+          <path strokeLinecap="round" d="M7 7h.01M7 17h.01" />
+        </svg>
+      }
       right={
         <button className="btn" onClick={refresh} disabled={busy}>
-          {busy ? 'Re-discovering…' : 'Re-discover tools'}
+          {busy ? 'Re-discovering…' : 'Re-discover'}
         </button>
       }
     >
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="space-y-2.5">
         {servers.map((s) => (
-          <div key={s.id} className="rounded-md border border-edge p-3">
-            <div className="flex items-center gap-2">
+          <div key={s.id} className="rounded-xl border border-edge bg-white/[0.02] p-3 transition-colors hover:border-accent/30">
+            <div className="flex flex-wrap items-center gap-2">
               <HealthDot health={s.health} />
-              <span className="font-medium">{s.id}</span>
-              <span className="badge bg-slate-500/15 text-slate-400">{s.transport}</span>
+              <span className="font-semibold text-slate-100">{s.id}</span>
+              <span className="badge bg-slate-500/15 text-slate-300">{s.transport}</span>
               <span
-                className={`badge ${s.trustTier === 'trusted' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-500/15 text-amber-400'}`}
+                className={`badge ${s.trustTier === 'trusted' ? 'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30' : 'bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/30'}`}
               >
                 {s.trustTier}
               </span>
-              {s.circuitOpen && <span className="badge bg-rose-500/15 text-rose-400">circuit open</span>}
+              {s.circuitOpen && <span className="badge bg-rose-500/15 text-rose-300 ring-1 ring-rose-500/30">circuit open</span>}
             </div>
-            <div className="mt-1 text-xs text-slate-400">{s.label}</div>
-            <div className="mt-1 text-xs text-slate-500">{s.toolCount} tools discovered</div>
-            {s.lastError && <div className="mt-1 text-xs text-rose-400">{s.lastError}</div>}
+            <div className="mt-1.5 text-xs text-slate-400">{s.label}</div>
+            <div className="mt-1 text-[11px] text-slate-500">{s.toolCount} tools discovered</div>
+            {s.lastError && <div className="mt-1 text-xs text-rose-300">{s.lastError}</div>}
           </div>
         ))}
       </div>
 
       <div className="mt-4">
-        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-          Live-discovered tools ({tools.filter((t) => !t.quarantined).length} active / {tools.length} total)
+        <div className="glass-label mb-2">
+          Live tools · <span className="text-flow">{active}</span> active / {tools.length} total
         </div>
         <div className="flex flex-wrap gap-1.5">
           {tools.map((t) => (
             <span
               key={t.id}
               title={t.quarantineReason ?? t.description}
-              className={`badge ${t.quarantined ? 'bg-rose-500/15 text-rose-400 line-through' : 'bg-slate-700/40 text-slate-300'}`}
+              className={`badge ${t.quarantined ? 'bg-rose-500/15 text-rose-300 line-through ring-1 ring-rose-500/30' : 'bg-white/[0.04] text-slate-300 ring-1 ring-edge'}`}
             >
               {t.id}
               {t.quarantined && ' ⚠'}

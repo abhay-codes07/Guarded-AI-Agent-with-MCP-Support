@@ -35,44 +35,224 @@ plan before acting, and every tool call is verified against it, so a call that d
 - **Human approval done right:** signed, single-use, time-boxed grants bound to the exact call;
   approver offline ⇒ timeout ⇒ deny.
 - **Tamper-evident audit log:** append-only, **hash-chained**, with a verify-chain action.
+- **Live enforcement pipeline:** the dashboard animates every tool call as it walks the gate
+  (`Request → Plan → Intent → Taint → Policy → Approval → Execute → Audit`) and lights up the stage
+  that decided it — green allow, red deny, amber approval.
 - **Fail-closed everywhere:** policy error, unreachable server, circuit-broken server, or expired
   approval all result in denial — never a silent allow.
 
 ---
 
-## Architecture
+## System architecture
 
+The control plane (dashboard) and the data plane (agent backend) are separate processes that stay in
+sync over a WebSocket. Inside the backend, the **Enforcement Point (PEP) is the only path to tools** —
+nothing reaches an MCP server without first clearing intent, taint, and policy.
+
+```mermaid
+flowchart TB
+  subgraph CP["🖥️  Control Plane — Next.js Dashboard"]
+    direction LR
+    UI1["Rules CRUD<br/>shadow / enforce"]
+    UI2["Approvals queue"]
+    UI3["Audit log<br/>+ verify chain"]
+    UI4["Chat + live<br/>Enforcement Pipeline"]
+  end
+
+  subgraph AB["⚙️  Agent Backend — Fastify + ws"]
+    direction TB
+    LOOP["Tool-Use Loop<br/>OpenAI gpt-4o · function-calling"]
+    IAP["Intent Service · IAP<br/>Ed25519 JWT + Merkle root"]
+    PEP{{"Enforcement Point — PEP<br/>the ONLY path to tools"}}
+    PDP["Policy Engine · PDP<br/>pure · hot-reload · versioned"]
+    TAINT["Taint Registry<br/>data-flow tracking"]
+    APPR["Approval Manager<br/>signed single-use grants"]
+    AUD[("Audit Log<br/>append-only · hash-chained")]
+    MCPM["MCP Client Manager<br/>discovery · trust tiers<br/>integrity pin · circuit breaker"]
+  end
+
+  subgraph MCP["🔌  MCP Servers (live-discovered)"]
+    direction LR
+    VAULT["Vault — stdio<br/>trusted · sandboxed FS + records"]
+    REMOTE["DeepWiki — Streamable HTTP<br/>untrusted · public docs"]
+  end
+
+  UI4 -- "REST /chat" --> LOOP
+  CP <-. "WebSocket — rules · approvals · audit · chat" .-> AB
+
+  LOOP -- "1 · capture plan" --> IAP
+  LOOP -- "2 · each tool_call" --> PEP
+  PEP -- "a · verify intent" --> IAP
+  PEP -- "b · taint check" --> TAINT
+  PEP -- "c · evaluate" --> PDP
+  PEP -- "d · approval" --> APPR
+  PEP -- "every decision" --> AUD
+  PEP == "allowed only" ==> MCPM
+  MCPM -- "stdio" --> VAULT
+  MCPM -- "Streamable HTTP" --> REMOTE
+
+  AUD -. "live stream" .-> CP
+  APPR -. "queue + grant" .-> CP
 ```
-Dashboard (Next.js)  ──REST + WebSocket──►  Agent backend (Fastify)
-  rules · approvals · audit · chat               │
-                                                 │  every tool call:
-                                                 ▼
-                                   ┌── Enforcement (PEP) ──┐
-                                   │  1. intent verify      │──►  Policy Engine (PDP)
-                                   │  2. taint / data-flow  │      pure · hot-reload · versioned
-                                   │  3. policy evaluate    │◄──  ALLOW/DENY/APPROVAL/TRANSFORM
-                                   │  4. human approval     │
-                                   └──────────┬─────────────┘
-                                              │ allowed
-                                              ▼
-                                   MCP Client Manager
-                                   (live discovery · trust tiers ·
-                                    integrity pinning · circuit breaker)
-                                     │ stdio              │ Streamable HTTP
-                                     ▼                    ▼
-                             Custom "Vault" server   Remote MCP server
+
+### Request lifecycle (user flow)
+
+What happens end-to-end when a user sends one message — plan is signed first, then **every** tool
+call is verified against that signature before anything runs.
+
+```mermaid
+sequenceDiagram
+  actor User
+  participant D as Dashboard
+  participant L as Agent Loop
+  participant I as Intent · IAP
+  participant P as PEP
+  participant E as Policy Engine
+  participant M as MCP Server
+  participant A as Audit Log
+
+  User->>D: ask a question
+  D->>L: POST /chat
+  L->>I: capture plan → leaf hashes → Merkle root → sign
+  I-->>L: Ed25519 intent token (JWT)
+  L-->>D: WS · signed plan (steps + root)
+
+  loop for each tool_call the model requests
+    L->>P: enforce(tool, args)
+    P->>I: verify signature + Merkle inclusion + arg constraints
+    P->>P: taint / data-flow check
+    P->>E: evaluate(context)
+    E-->>P: ALLOW · DENY · REQUIRE_APPROVAL · TRANSFORM
+
+    alt needs human approval
+      P-->>D: WS · approval request (TTL countdown)
+      D-->>P: signed single-use grant  (or TTL → DENY)
+    end
+
+    alt allowed / approved / transformed
+      P->>M: callTool(args)
+      M-->>P: result (marked untrusted + spotlighted)
+    else denied (drift / taint / policy)
+      P-->>L: blocked + reason
+    end
+
+    P->>A: append hash-chained entry
+    A-->>D: WS · audit row + pipeline animation
+  end
+
+  L-->>User: final answer (with blocked calls explained)
 ```
+
+### The enforcement gate (decision flow)
+
+Inside `PEP.enforce`, checks run **in order and fail-closed** — the first stage to reject ends the
+call. This is exactly what the dashboard's animated pipeline visualizes.
+
+```mermaid
+flowchart LR
+  Start(["tool_call"]) --> Q{"tool<br/>quarantined?"}
+  Q -- yes --> DENY[["🔴 DENY"]]
+  Q -- no --> INT{"intent verify<br/>sig · Merkle · args"}
+  INT -- "drift" --> DENY
+  INT -- ok --> TNT{"tainted data →<br/>sensitive arg?"}
+  TNT -- yes --> DENY
+  TNT -- no --> POL{"policy evaluate<br/>deny-overrides"}
+  POL -- DENY --> DENY
+  POL -- REQUIRE_APPROVAL --> APP{"human grant<br/>before TTL?"}
+  APP -- no --> DENY
+  APP -- yes --> EXEC["🟢 execute via MCP"]
+  POL -- TRANSFORM --> EXEC
+  POL -- ALLOW --> EXEC
+  EXEC --> AUD[("📒 audit append")]
+  DENY --> AUD
+```
+
+---
 
 ## Monorepo layout
 
 | Path | What |
 |------|------|
-| `packages/shared` | Cross-cutting types & zod schemas |
+| `packages/shared` | Cross-cutting types & zod schemas (`Rule`, `Decision`, `AuditEntry`, `IntentToken`…) |
 | `packages/policy-engine` | The PDP — pure, framework-free, unit-tested (the heart) |
 | `packages/mcp-vault` | A custom MCP server: sandboxed file manager + record store + secrets |
 | `packages/agent` | MCP client manager, intent layer, taint, enforcement, audit, approvals, tool-use loop, HTTP/WS API |
-| `apps/dashboard` | Next.js guardrails console |
+| `apps/dashboard` | Next.js guardrails console (rules, approvals, audit, chat, live pipeline) |
 | `mcp.config.json` | Registry of MCP servers — add one here and the agent discovers its tools at runtime |
+
+```mermaid
+flowchart LR
+  SH["@gaa/shared<br/>types · zod"]
+  PE["@gaa/policy-engine<br/>pure PDP"]
+  VA["@gaa/mcp-vault<br/>stdio server"]
+  AG["@gaa/agent<br/>loop · IAP · PEP · API"]
+  DB["dashboard<br/>Next.js"]
+
+  PE --> SH
+  VA --> SH
+  AG --> SH
+  AG --> PE
+  DB -. "REST + WS" .-> AG
+
+  classDef heart fill:#1e1b4b,stroke:#6366f1,color:#c7d2fe;
+  class PE heart;
+```
+
+> Dependency arrows point **inward** to `shared`. The policy engine never imports the agent; the
+> agent imports the policy engine. This keeps the decision logic pure and independently testable.
+
+---
+
+## Core pieces in depth
+
+### Policy engine (PDP) — the heart
+A pure, framework-free module with one entry point evaluated for **every** tool call:
+`evaluate(ctx) → Decision`. Rules are **data, not code** (no tool name is ever hardcoded in logic):
+each rule has a `match` predicate (tool glob, server/trust-tier, JSON-path/regex on args, taint flag,
+risk threshold, budget) and an `action` (`deny / require_approval / allow / transform`). Conflicts
+resolve by **priority + deny-overrides** (`DENY > REQUIRE_APPROVAL > TRANSFORM > ALLOW`),
+deterministically, recording both the winning and losing rules so every outcome is explainable. The
+active rule set hashes to a **`policyVersion`** stamped into every decision and audit entry. Rules
+**hot-reload** — a dashboard edit governs the next tool call with no restart. Any throw or unreachable
+store ⇒ **DENY** (fail-closed). A **shadow**-mode rule is evaluated and logged ("would have denied")
+but does not block — test before you enforce.
+
+### Intent Assurance Plane (IAP) — cryptographic intent
+Before acting, the loop asks the model for a least-privilege **plan** of intended steps
+`{ tool, argConstraints }`. Each step is canonicalized to a leaf hash `H(tool ‖ argConstraints)`; the
+leaves form a **Merkle tree** whose root commits the whole plan. The root is signed into an
+**Ed25519 JWT** (the "intent token"). Per call, the PEP verifies the **signature + expiry**, recomputes
+the call's leaf and proves **Merkle inclusion** under the signed root, and checks the **actual args
+satisfy the committed constraints**. Any failure ⇒ *plan drift* ⇒ DENY. Re-planning is allowed but
+re-signs a new token and is logged — every action always traces to exactly one signed plan.
+
+### Prompt-injection defense (defense in depth)
+1. **Integrity pinning (TOFU):** hash each tool's name+description+schema on first discovery; re-hash
+   on every `tools/list`; a mismatch quarantines the tool (rug-pull / tool poisoning) and raises an
+   audit alert.
+2. **Spotlighting + quarantine:** tool results are wrapped in explicit delimiters and labeled
+   *untrusted data — never instructions*; the system prompt instructs the model accordingly.
+3. **Taint / data-flow:** results from untrusted origins are tainted; if tainted content later appears
+   in a sensitive tool's args, the injection rule denies it.
+4. **Plan-drift (IAP):** injection's goal is deviation from intent — and drift is rejected at the gate.
+
+### Resilience & fail-closed
+Policy error/unreachable ⇒ DENY. MCP calls are wrapped with a **timeout** and surfaced to the model as
+a *structured* tool error; a per-server **circuit breaker** opens after repeated failures and
+short-circuits further calls; reconnect happens with backoff. A failed call is never reported as
+success. A per-conversation **kill switch** freezes a conversation after N violations (assume
+compromise) until an admin clears it.
+
+### Provenance — tamper-evident audit
+Append-only log; each entry embeds `prevHash`, so the chain is verifiable. Entry =
+`{ ts, conversationId, tool, serverId, argsRedacted, taint, riskScore, verdict, matchedRuleId,
+policyVersion, latencyMs, mode, prevHash, hash }`. The dashboard is a projection over this log; the
+**Verify hash chain** action recomputes hashes to prove no tampering.
+
+### Human approval — done right
+Real-time queue over WebSocket. Approving issues a **signed, single-use, time-boxed grant** bound to
+`(conversationId, tool, argHash)` — it cannot be replayed for a different call or different args.
+Approver offline ⇒ TTL expiry ⇒ **DENY**.
 
 ---
 
@@ -138,13 +318,15 @@ It also ships two demo "traps":
 
 ## A 2-minute tour
 
-1. Open the dashboard — see both MCP servers healthy and their tools discovered live.
+1. Open the dashboard — see both MCP servers healthy, their tools discovered live, and the
+   **Enforcement Pipeline** idle at the top.
 2. **Chat:** "List the files under /sandbox/notes" → the agent plans, the plan is signed, the read is
-   allowed, and the decision shows up in the audit log.
-3. **Block live:** add a rule blocking `vault.delete_all`, then ask the agent to delete everything →
-   denied on the next call, no restart.
+   allowed, and a green packet runs the pipeline to **Execute** while the decision appears in the audit log.
+3. **Block live:** the seed policy already blocks `vault.delete_all`; ask the agent to delete
+   everything → the call drifts from the signed plan and is **denied** — the pipeline stops red at the
+   **Intent** gate, no restart.
 4. **Approval:** the seed policy requires approval for `vault.export_secret`; ask for the secret →
-   the call pauses in the approval queue. Approve it once; let the next one expire → denied.
+   the call pauses amber at the **Approval** gate. Approve it once; let the next one expire → denied.
 5. **The trap:** "Summarize the onboarding note" → the note tries to hijack the agent into exporting a
    secret; the export is **outside the signed plan** and tainted → blocked, and the attempt is logged.
 6. **Integrity:** click *Re-discover tools* → the rug-pulled tool is quarantined.

@@ -74,9 +74,14 @@ export function Rules({ rules, policyVersion }: { rules: Rule[]; policyVersion: 
   return (
     <Section
       title="Guardrail Rules"
+      icon={
+        <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.7" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16M6 8h12M7 8l-3 6h6zM17 8l-3 6h6z" />
+        </svg>
+      }
       right={
         <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-500">policy {policyVersion}</span>
+          <span className="chip font-mono text-slate-500">policy {policyVersion}</span>
           <button className="btn-primary" onClick={() => setOpen((o) => !o)}>
             {open ? 'Close' : '+ New rule'}
           </button>
@@ -84,7 +89,7 @@ export function Rules({ rules, policyVersion }: { rules: Rule[]; policyVersion: 
       }
     >
       {open && (
-        <div className="mb-4 rounded-md border border-edge p-3">
+        <div className="animate-fadeUp mb-4 rounded-xl border border-accent/30 bg-accent/[0.04] p-4">
           <div className="grid gap-2 md:grid-cols-2">
             <label className="text-xs text-slate-400">
               Name
@@ -179,22 +184,27 @@ export function Rules({ rules, policyVersion }: { rules: Rule[]; policyVersion: 
           .slice()
           .sort((a, b) => a.priority - b.priority)
           .map((r) => (
-            <div key={r.id} className="flex items-center justify-between rounded-md border border-edge px-3 py-2">
+            <div
+              key={r.id}
+              className={`flex items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5 transition-colors ${
+                r.enabled ? 'border-edge bg-white/[0.02] hover:border-accent/30' : 'border-edge/50 bg-transparent opacity-50'
+              }`}
+            >
               <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">{r.name}</span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-semibold text-slate-100">{r.name}</span>
                   <VerdictPill verdict={r.action} />
-                  <span className="badge bg-slate-700/40 text-slate-400">{r.kind}</span>
-                  <span className="text-xs text-slate-500">p{r.priority}</span>
-                  {r.mode === 'shadow' && <span className="badge bg-violet-500/15 text-violet-400">shadow</span>}
+                  <span className="badge bg-white/[0.05] text-slate-400 ring-1 ring-edge">{r.kind}</span>
+                  <span className="text-[11px] text-slate-500">p{r.priority}</span>
+                  {r.mode === 'shadow' && <span className="badge bg-violet-500/15 text-violet-300 ring-1 ring-violet-500/30">shadow</span>}
                 </div>
-                <div className="truncate text-xs text-slate-500">{JSON.stringify(r.match)}</div>
+                <div className="mt-0.5 truncate font-mono text-[11px] text-slate-500">{JSON.stringify(r.match)}</div>
               </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <button className="btn" onClick={() => setMode(r, r.mode === 'enforce' ? 'shadow' : 'enforce')}>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <button className="btn-ghost border border-edge" onClick={() => setMode(r, r.mode === 'enforce' ? 'shadow' : 'enforce')}>
                   {r.mode === 'enforce' ? 'to shadow' : 'to enforce'}
                 </button>
-                <button className="btn" onClick={() => toggle(r)}>
+                <button className="btn-ghost border border-edge" onClick={() => toggle(r)}>
                   {r.enabled ? 'Disable' : 'Enable'}
                 </button>
                 <button className="btn-danger" onClick={() => remove(r)}>
