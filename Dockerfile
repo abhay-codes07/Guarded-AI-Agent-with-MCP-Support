@@ -1,5 +1,5 @@
 # Agent backend (also spawns the stdio Vault MCP server as a child process).
-FROM node:20-slim
+FROM node:22-slim
 
 RUN corepack enable
 WORKDIR /app

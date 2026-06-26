@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "description": "A guarded AI agent with MCP support: a policy layer that gates every tool call between an LLM and its MCP tool servers.",
+  "packageManager": "pnpm@11.5.2",
   "engines": {
     "node": ">=20"
   },

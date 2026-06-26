@@ -1,5 +1,5 @@
 # Dashboard (Next.js). NEXT_PUBLIC_AGENT_URL is inlined at build time.
-FROM node:20-slim AS build
+FROM node:22-slim AS build
 RUN corepack enable
 WORKDIR /app
 
