@@ -83,7 +83,11 @@ async function main() {
 
   // --- HTTP API ---
   const app = Fastify({ logger: false });
-  await app.register(cors, { origin: [config.corsOrigin, /localhost:\d+$/], credentials: true });
+  // Allow the configured origin, any *.vercel.app deploy (production + previews), and local dev.
+  await app.register(cors, {
+    origin: [config.corsOrigin, /\.vercel\.app$/, /localhost:\d+$/],
+    credentials: true,
+  });
   await app.register(websocket);
 
   app.get('/health', async () => ({ ok: true, model: config.openaiModel, hasKey: Boolean(config.openaiApiKey) }));
