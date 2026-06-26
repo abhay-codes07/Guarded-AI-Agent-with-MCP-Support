@@ -1,7 +1,8 @@
 # Agent backend (also spawns the stdio Vault MCP server as a child process).
 FROM node:22-slim
 
-RUN corepack enable
+# Pin pnpm explicitly so corepack never auto-pulls a newer version that needs a newer Node.
+RUN corepack enable && corepack prepare pnpm@11.5.2 --activate
 WORKDIR /app
 
 # Install deps first for better layer caching.

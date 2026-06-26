@@ -1,6 +1,6 @@
 # Dashboard (Next.js). NEXT_PUBLIC_AGENT_URL is inlined at build time.
 FROM node:22-slim AS build
-RUN corepack enable
+RUN corepack enable && corepack prepare pnpm@11.5.2 --activate
 WORKDIR /app
 
 ARG NEXT_PUBLIC_AGENT_URL=http://localhost:8787
