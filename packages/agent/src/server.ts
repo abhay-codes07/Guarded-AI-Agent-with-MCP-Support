@@ -90,6 +90,14 @@ async function main() {
   });
   await app.register(websocket);
 
+  app.get('/', async () => ({
+    service: 'guarded-ai-agent',
+    status: 'ok',
+    model: config.openaiModel,
+    activeTools: mcp.activeTools().length,
+    endpoints: ['/health', '/tools', '/servers', '/rules', '/audit', '/ws'],
+  }));
+
   app.get('/health', async () => ({ ok: true, model: config.openaiModel, hasKey: Boolean(config.openaiApiKey) }));
 
   app.get('/tools', async () => ({ tools: mcp.listTools(), active: mcp.activeTools().length }));
